@@ -1,114 +1,92 @@
 -- ============================================
---  SANAL ORMAN - MySQL Veritabanı Şeması
---  Bu dosyayı MySQL'de çalıştırarak tüm tabloları oluşturun.
---  Kullanım: mysql -u kullanici -p < schema.sql
+--  SANAL ORMAN - Cloudflare D1 Veritabanı Şeması
+--  Kullanım: wrangler d1 execute ormanweb --file=schema.sql
+--  D1 = SQLite tabanlı (MySQL değil!)
 -- ============================================
-
-CREATE DATABASE IF NOT EXISTS ormanweb
-  CHARACTER SET utf8mb4
-  COLLATE utf8mb4_unicode_ci;
-
-USE ormanweb;
 
 -- KULLANICILAR (üyeler + yönetici)
 CREATE TABLE IF NOT EXISTS users (
-  id INT AUTO_INCREMENT PRIMARY KEY,
-  ad VARCHAR(100) NOT NULL,
-  email VARCHAR(150) NOT NULL UNIQUE,
-  sifre_hash VARCHAR(255) NOT NULL,
-  rol ENUM('user','admin') DEFAULT 'user',
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-) ENGINE=InnoDB;
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  ad TEXT NOT NULL,
+  email TEXT NOT NULL UNIQUE,
+  sifre_hash TEXT NOT NULL,
+  rol TEXT NOT NULL DEFAULT 'user' CHECK (rol IN ('user','admin')),
+  created_at TEXT DEFAULT (datetime('now'))
+);
 
 -- KATEGORİLER
 CREATE TABLE IF NOT EXISTS categories (
-  id INT AUTO_INCREMENT PRIMARY KEY,
-  ad VARCHAR(100) NOT NULL
-) ENGINE=InnoDB;
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  ad TEXT NOT NULL
+);
 
 -- ÜRÜNLER (fidanlar)
 CREATE TABLE IF NOT EXISTS products (
-  id INT AUTO_INCREMENT PRIMARY KEY,
-  ad VARCHAR(150) NOT NULL,
-  kategori_id INT,
-  emoji VARCHAR(10),
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  ad TEXT NOT NULL,
+  kategori_id INTEGER,
+  emoji TEXT,
   image_url TEXT,
-  fiyat DECIMAL(10,2) NOT NULL,
-  eski_fiyat DECIMAL(10,2),
-  birim VARCHAR(20) DEFAULT 'adet',
+  fiyat REAL NOT NULL,
+  eski_fiyat REAL,
+  birim TEXT DEFAULT 'adet',
   aciklama TEXT,
-  durum ENUM('aktif','pasif') DEFAULT 'aktif',
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  durum TEXT NOT NULL DEFAULT 'aktif' CHECK (durum IN ('aktif','pasif')),
+  created_at TEXT DEFAULT (datetime('now')),
   FOREIGN KEY (kategori_id) REFERENCES categories(id) ON DELETE SET NULL
-) ENGINE=InnoDB;
+);
 
 -- SİPARİŞLER
 CREATE TABLE IF NOT EXISTS orders (
-  id INT AUTO_INCREMENT PRIMARY KEY,
-  siparis_no VARCHAR(20) NOT NULL UNIQUE,
-  user_id INT NOT NULL,
-  toplam DECIMAL(10,2) NOT NULL,
-  kargo DECIMAL(10,2) DEFAULT 0,
-  durum ENUM('hazirlaniyor','kargoda','teslim') DEFAULT 'hazirlaniyor',
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  siparis_no TEXT NOT NULL UNIQUE,
+  user_id INTEGER NOT NULL,
+  toplam REAL NOT NULL,
+  kargo REAL DEFAULT 0,
+  durum TEXT NOT NULL DEFAULT 'hazirlaniyor' CHECK (durum IN ('hazirlaniyor','kargoda','teslim')),
+  created_at TEXT DEFAULT (datetime('now')),
   FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-) ENGINE=InnoDB;
+);
 
 -- SİPARİŞ ÜRÜNLERİ
 CREATE TABLE IF NOT EXISTS order_items (
-  id INT AUTO_INCREMENT PRIMARY KEY,
-  order_id INT NOT NULL,
-  product_id INT NOT NULL,
-  adet INT NOT NULL DEFAULT 1,
-  birim_fiyat DECIMAL(10,2) NOT NULL,
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  order_id INTEGER NOT NULL,
+  product_id INTEGER NOT NULL,
+  adet INTEGER NOT NULL DEFAULT 1,
+  birim_fiyat REAL NOT NULL,
   FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE CASCADE,
   FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE
-) ENGINE=InnoDB;
+);
 
--- SE PET (kullanıcı sepeti)
+-- SEPET
 CREATE TABLE IF NOT EXISTS cart (
-  id INT AUTO_INCREMENT PRIMARY KEY,
-  user_id INT NOT NULL,
-  product_id INT NOT NULL,
-  qty INT NOT NULL DEFAULT 1,
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL,
+  product_id INTEGER NOT NULL,
+  qty INTEGER NOT NULL DEFAULT 1,
   FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
   FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE
-) ENGINE=InnoDB;
+);
 
 -- AKTİF ZİYARETÇİLER (canlı izleme)
 CREATE TABLE IF NOT EXISTS visits (
-  id INT AUTO_INCREMENT PRIMARY KEY,
-  oturum_id VARCHAR(50) NOT NULL,
-  kullanici_ad VARCHAR(100) DEFAULT 'Misafir',
-  sayfa VARCHAR(100) DEFAULT 'anasayfa',
-  son_guncelleme TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  INDEX idx_oturum (oturum_id),
-  INDEX idx_son_guncelleme (son_guncelleme)
-) ENGINE=InnoDB;
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  oturum_id TEXT NOT NULL,
+  kullanici_ad TEXT DEFAULT 'Misafir',
+  sayfa TEXT DEFAULT 'anasayfa',
+  son_guncelleme TEXT DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_oturum ON visits (oturum_id);
+CREATE INDEX IF NOT EXISTS idx_son_guncelleme ON visits (son_guncelleme);
 
--- OLAY AKIŞI (canlı izleme - üyelik/giriş/sipariş/gezinme)
+-- OLAY AKIŞI (canlı izleme)
 CREATE TABLE IF NOT EXISTS analytics_events (
-  id INT AUTO_INCREMENT PRIMARY KEY,
-  tip VARCHAR(50) NOT NULL,
-  kullanici_ad VARCHAR(100) DEFAULT 'Misafir',
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  tip TEXT NOT NULL,
+  kullanici_ad TEXT DEFAULT 'Misafir',
   detay TEXT,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  INDEX idx_tip (tip),
-  INDEX idx_created_at (created_at)
-) ENGINE=InnoDB;
-
--- ============================================
---  ÖN TANIMLI VERİLER
--- ============================================
-
--- Kategoriler
-INSERT IGNORE INTO categories (id, ad) VALUES
-  (1, 'Meyve Fidanlari'),
-  (2, 'Sus Bitkileri'),
-  (3, 'Cali ve Cit'),
-  (4, 'Orman Agaclari');
-
--- Yönetici hesabı
--- Şifre (bcrypt hash): admin123
--- NOT: Setup.js bunu otomatik oluşturur; gerekiyorsa aşağıdakini de kullanın.
--- INSERT INTO users (ad, email, sifre_hash, rol) VALUES ('Yonetici', 'admin@sanalorman.com', '$2a$12$XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX', 'admin');
+  created_at TEXT DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_tip ON analytics_events (tip);
+CREATE INDEX IF NOT EXISTS idx_created_at ON analytics_events (created_at);
